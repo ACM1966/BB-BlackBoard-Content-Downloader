@@ -27,7 +27,7 @@
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/your-username/BB-Downloader.git
+git clone https://github.com/ACM1966/BB-Downloader.git
 cd BB-Downloader
 pip install -r requirements.txt
 ```
