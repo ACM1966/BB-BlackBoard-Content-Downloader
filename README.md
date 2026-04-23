@@ -15,6 +15,8 @@
 | ⏭ **Incremental Sync** | Skips already-downloaded files (size-based check) |
 | 📊 **Rich Progress** | Real-time progress bars with speed & ETA |
 | 🔄 **Auto Retry** | Failed downloads retry up to 3 times with exponential backoff |
+| 📄 **`.env` support** | Loads `BB_BASE_URL` (and optional flags) from a project `.env` via `python-dotenv` |
+| 🔒 **Campus TLS** | Relaxed TLS defaults for `requests` when OpenSSL 3 handshakes fail (browser still works); opt out with `BB_TLS_STRICT` |
 
 ## 📋 Prerequisites
 
@@ -44,10 +46,14 @@ Edit `.env`:
 
 ```ini
 BB_BASE_URL=https://bb.your-university.edu
+# Optional: use system-default TLS only (disable campus compatibility adapter)
+# BB_TLS_STRICT=1
 ```
 
-> **Tip:** You can also set the `BB_BASE_URL` environment variable directly instead of using a `.env` file.  
-> If left unconfigured, the tool will use the placeholder URL and fail to connect.
+The app **loads `.env` automatically** on startup (you do not need to export variables manually unless you prefer that).
+
+> **Tip:** You can still set `BB_BASE_URL` (and `BB_TLS_STRICT`) in the shell instead of `.env`.  
+> If `BB_BASE_URL` is missing, the placeholder URL is used and connections will fail.
 
 ### 3. Run
 
@@ -55,7 +61,9 @@ BB_BASE_URL=https://bb.your-university.edu
 python main.py
 ```
 
-A browser window will open — **log in with your campus account**. The program detects login automatically and starts downloading.
+**First login:** a browser window opens — **log in with your campus account**. The program detects login automatically, validates the Blackboard REST API, then continues (course list / download).
+
+**Later runs:** if `cookies.json` is still valid, the browser **does not** open. To force a browser login again, run `python main.py --relogin` or delete `cookies.json`.
 
 ### 4. Output
 
@@ -102,28 +110,41 @@ python main.py -c CSC
 python main.py --relogin --all
 ```
 
+## 🔧 Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BB_BASE_URL` | Yes* | Blackboard site root, e.g. `https://bb.your-university.edu` (no trailing path). Set in `.env` or the shell. |
+| `BB_TLS_STRICT` | No | If `1` / `true` / `yes`, disables the TLS compatibility adapter and uses urllib3/OpenSSL defaults. |
+
+\*Required in practice: without it, the default placeholder URL is used and requests will fail.
+
+Values from a project **`.env`** are loaded automatically when you run `python main.py`.
+
 ## 🏗 Architecture
 
 ```
 main.py          CLI entry point — argument parsing, course selection, orchestration
-auth.py          Browser-based login via Selenium → cookie extraction → session reuse
+auth.py          Browser login (Selenium) → cookies → requests session + TLS compat + validation
 api.py           Blackboard Learn REST API client (paginated, with error handling)
 downloader.py    Recursive content traversal + streaming file download with progress
-config.py        Central configuration (URLs, timeouts, retry policy)
+config.py        Loads `.env`, URLs, timeouts, retry policy
 ```
 
 **Flow:**
 
 ```
-Browser Login → Extract Cookies → REST API /users/me
+Browser login (or valid cookies.json) → requests session + TLS compat → REST API /users/me
     → /users/{id}/courses → /courses/{id}/contents (recursive)
         → /attachments/{id}/download (streamed)
 ```
 
 ## 📝 Notes
 
-- First run requires manual browser login; subsequent runs reuse cached cookies.
-- Cookies expire based on server policy — the tool auto-detects expiry and prompts re-login.
+- First run requires manual browser login; subsequent runs reuse cached cookies (`cookies.json`, git-ignored).
+- Cookies expire based on server policy — the tool validates the API and will ask you to log in again when cookies no longer work.
+- Some campuses use TLS chains or cipher settings that make **Python/`requests` fail with `SSLV3_ALERT_HANDSHAKE_FAILURE`** even though Chrome works. This project mounts a **compatible TLS adapter** (still verifies certificates) by default. Set **`BB_TLS_STRICT=1`** in `.env` or the environment if you need the default urllib3/OpenSSL behavior.
+- If login in the browser succeeds but the CLI reports **API / authentication failure**, check the printed diagnostics. **HTTP 403** on `/learn/api/public/v1` often means the institution has restricted the **Public REST API** for your role.
 - Courses with instructor-set access restrictions may not be downloadable.
 - Watch your disk space when downloading many courses.
 
