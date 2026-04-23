@@ -10,13 +10,13 @@ build/
 venv/
 env/
 
-# Downloads
+# Downloaded course files — never push to GitHub
 downloads/
 
-# Cookies cache
+# Session cache (contains credentials)
 cookies.json
 
-# Environment config
+# Local configuration (copy from env.template)
 .env
 
 # IDE

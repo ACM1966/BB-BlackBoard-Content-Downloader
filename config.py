@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# 项目根目录下的 .env（与 README 一致）
+# 本地配置：从仓库中的 env.template 复制为 .env（勿将 .env 提交到 Git）
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # Blackboard 基础 URL（.env / 环境变量 / 默认值）
