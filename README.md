@@ -1,59 +1,93 @@
-# 📦 BB Downloader
+# BB BlackBoard Content Downloader
 
-> Automatically download **all** course files from [Blackboard Learn](https://www.blackboard.com/) with a single command.
+Automatically download **all** course files from [Blackboard Learn](https://www.blackboard.com/) with one command — browser login (SSO/CAS supported), REST API traversal, and incremental file sync.
 
 ---
 
-## ✨ Features
+## Table of contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [CLI options](#cli-options)
+- [Output](#output)
+- [What is not pushed to GitHub](#what-is-not-pushed-to-github)
+- [Architecture](#architecture)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+- [中文说明](#中文说明)
+
+---
+
+## Features
 
 | Feature | Description |
 |---------|-------------|
-| 🔐 **Browser Login** | Opens a browser for SSO / CAS / campus login — no password stored |
-| 🍪 **Cookie Cache** | Saves session cookies locally; skip re-login on next run |
-| 📚 **Course Selection** | Lists enrolled courses, supports keyword filtering |
-| 📂 **Directory Mirroring** | Preserves Blackboard's folder structure on disk |
-| ⏭ **Incremental Sync** | Skips already-downloaded files (size-based check) |
-| 📊 **Rich Progress** | Real-time progress bars with speed & ETA |
-| 🔄 **Auto Retry** | Failed downloads retry up to 3 times with exponential backoff |
-| 📄 **`.env` support** | Loads `BB_BASE_URL` (and optional flags) from a project `.env` via `python-dotenv` |
-| 🔒 **Campus TLS** | Relaxed TLS defaults for `requests` when OpenSSL 3 handshakes fail (browser still works); opt out with `BB_TLS_STRICT` |
+| **Browser login** | Opens Chrome or Edge for campus SSO — passwords are not stored by this tool |
+| **Cookie cache** | Saves `cookies.json` locally; skip the browser on the next run if still valid |
+| **`.env` loading** | Reads `BB_BASE_URL` (and options) from a local `.env` via `python-dotenv` |
+| **Campus TLS** | Optional compatibility adapter for OpenSSL 3 / strict campus TLS; opt out with `BB_TLS_STRICT` |
+| **Course selection** | Lists enrollments; filter by keywords or download everything with `--all` |
+| **Folder layout** | Mirrors Blackboard content folders on disk |
+| **Incremental sync** | Skips files that already exist with the same size |
+| **Progress & retries** | Rich progress bars; failed downloads retry with backoff |
 
-## 📋 Prerequisites
+---
 
-- **Python** ≥ 3.10
-- **Chrome** or **Edge** browser
-- A valid campus account with Blackboard access
+## Prerequisites
 
-## 🚀 Quick Start
+- **Python** ≥ 3.10  
+- **Google Chrome** or **Microsoft Edge**  
+- A Blackboard Learn account at your institution  
 
-### 1. Clone & install
+---
+
+## Quick start
+
+### 1. Clone and install
 
 ```bash
-git clone https://github.com/ACM1966/BB-Downloader.git
-cd BB-Downloader
+git clone https://github.com/<your-account>/BB-BlackBoard-Content-Downloader.git
+cd BB-BlackBoard-Content-Downloader
 pip install -r requirements.txt
 ```
 
-### 2. Configure
+Use a virtual environment if you prefer (`python -m venv .venv` then activate it).
 
-Copy the example environment file and set your Blackboard URL:
+### 2. Configure (single template file)
+
+The repo ships **`env.template`** only. Copy it to **`.env`** and edit the URL (do **not** commit `.env`).
+
+**Linux / macOS**
 
 ```bash
-cp .env.example .env
+cp env.template .env
+```
+
+**Windows (PowerShell)**
+
+```powershell
+Copy-Item env.template .env
+```
+
+**Windows (CMD)**
+
+```cmd
+copy env.template .env
 ```
 
 Edit `.env`:
 
 ```ini
 BB_BASE_URL=https://bb.your-university.edu
-# Optional: use system-default TLS only (disable campus compatibility adapter)
+# Optional:
 # BB_TLS_STRICT=1
 ```
 
-The app **loads `.env` automatically** on startup (you do not need to export variables manually unless you prefer that).
-
-> **Tip:** You can still set `BB_BASE_URL` (and `BB_TLS_STRICT`) in the shell instead of `.env`.  
-> If `BB_BASE_URL` is missing, the placeholder URL is used and connections will fail.
+You can instead export `BB_BASE_URL` (and `BB_TLS_STRICT`) in the shell; the app loads `.env` automatically when present.
 
 ### 3. Run
 
@@ -61,15 +95,55 @@ The app **loads `.env` automatically** on startup (you do not need to export var
 python main.py
 ```
 
-**First login:** a browser window opens — **log in with your campus account**. The program detects login automatically, validates the Blackboard REST API, then continues (course list / download).
+- **First time:** a browser window opens — complete your usual campus login. The tool waits until you land on Blackboard, then validates the Public REST API and continues.  
+- **Later runs:** if `cookies.json` is still valid, **no browser** opens. Use `python main.py --relogin` or delete `cookies.json` to sign in again.
 
-**Later runs:** if `cookies.json` is still valid, the browser **does not** open. To force a browser login again, run `python main.py --relogin` or delete `cookies.json`.
+### 4. Default output
 
-### 4. Output
+By default files go to **`./downloads/`** (configurable with `-o`). That folder is **gitignored** so course files are not uploaded to GitHub.
 
-Files are saved to `./downloads/` by default:
+---
 
+## Configuration
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BB_BASE_URL` | Yes* | Root URL of Blackboard, e.g. `https://bb.example.edu` — **no** path after the host. |
+| `BB_TLS_STRICT` | No | If `1`, `true`, or `yes`, disables the TLS compatibility adapter for `requests`. |
+
+\*If unset, a placeholder is used and requests will fail until you configure a real base URL.
+
+---
+
+## CLI options
+
+```text
+usage: main.py [-h] [-o OUTPUT_DIR] [-c [COURSE ...]] [--relogin] [--all]
 ```
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `-o`, `--output-dir` | Output directory | `python main.py -o D:\BlackboardFiles` |
+| `-c`, `--course` | Keywords to filter course names | `python main.py -c "Math" "Physics"` |
+| `--all` | Download all courses (no prompt) | `python main.py --all` |
+| `--relogin` | Ignore cache; open browser again | `python main.py --relogin` |
+
+**Examples**
+
+```bash
+python main.py --all
+python main.py -o D:\BlackboardFiles
+python main.py -c CSC
+python main.py --relogin --all
+```
+
+---
+
+## Output
+
+Default tree (simplified):
+
+```text
 downloads/
 ├── Course A/
 │   ├── Week 1/
@@ -81,81 +155,80 @@ downloads/
     └── ...
 ```
 
-## ⚙️ CLI Options
+---
 
-```
-usage: main.py [-h] [-o OUTPUT_DIR] [-c [COURSE ...]] [--relogin] [--all]
-```
+## What is not pushed to GitHub
 
-| Flag | Description | Example |
-|------|-------------|---------|
-| `-o, --output-dir` | Custom download directory | `python main.py -o D:\courses` |
-| `-c, --course` | Filter courses by keyword | `python main.py -c "Math" "Physics"` |
-| `--all` | Download all courses (skip prompt) | `python main.py --all` |
-| `--relogin` | Force re-login (ignore cached cookies) | `python main.py --relogin` |
+These paths are listed in **`.gitignore`** so they stay on your machine only:
 
-#### Examples
+| Path | Reason |
+|------|--------|
+| **`downloads/`** | Downloaded teaching materials — large and personal |
+| **`.env`** | Your institution URL / flags (copy from `env.template`) |
+| **`cookies.json`** | Session cookies — sensitive |
+| **`.venv/`**, **`__pycache__/`** | Local environment and bytecode |
 
-```bash
-# Download everything
-python main.py --all
+**Never** force-add `.env`, `cookies.json`, or `downloads/` to a public repository.
 
-# Save to a specific folder
-python main.py -o D:\BlackboardFiles
+---
 
-# Only courses matching "CSC"
-python main.py -c CSC
+## Architecture
 
-# Force re-login + download all
-python main.py --relogin --all
+```text
+main.py          CLI — args, course selection, orchestration
+auth.py          Selenium login → cookies → requests session + TLS compat + /users/me check
+api.py           Blackboard Learn Public API v1 (pagination, errors)
+downloader.py    Recursive contents + streamed attachment downloads
+config.py        load_dotenv(".env"), URLs, timeouts, retries
 ```
 
-## 🔧 Environment variables
+**Flow**
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BB_BASE_URL` | Yes* | Blackboard site root, e.g. `https://bb.your-university.edu` (no trailing path). Set in `.env` or the shell. |
-| `BB_TLS_STRICT` | No | If `1` / `true` / `yes`, disables the TLS compatibility adapter and uses urllib3/OpenSSL defaults. |
-
-\*Required in practice: without it, the default placeholder URL is used and requests will fail.
-
-Values from a project **`.env`** are loaded automatically when you run `python main.py`.
-
-## 🏗 Architecture
-
-```
-main.py          CLI entry point — argument parsing, course selection, orchestration
-auth.py          Browser login (Selenium) → cookies → requests session + TLS compat + validation
-api.py           Blackboard Learn REST API client (paginated, with error handling)
-downloader.py    Recursive content traversal + streaming file download with progress
-config.py        Loads `.env`, URLs, timeouts, retry policy
+```text
+Browser login (or valid cookies.json)
+  → requests + TLS compat
+  → GET /learn/api/public/v1/users/me
+  → /users/{id}/courses
+  → /courses/{id}/contents (recursive)
+  → /attachments/{id}/download
 ```
 
-**Flow:**
+---
 
-```
-Browser login (or valid cookies.json) → requests session + TLS compat → REST API /users/me
-    → /users/{id}/courses → /courses/{id}/contents (recursive)
-        → /attachments/{id}/download (streamed)
-```
+## Troubleshooting
 
-## 📝 Notes
+| Symptom | What to try |
+|---------|-------------|
+| **`SSLV3_ALERT_HANDSHAKE_FAILURE`** with `requests` but Chrome works | Leave default TLS compat on; only set `BB_TLS_STRICT=1` if you know you need strict OpenSSL defaults. |
+| Browser login OK, CLI says API / auth failed | Read the printed **HTTP status** and body snippet. **403** on `/learn/api/public/v1` often means the school disabled or restricted the **Public REST API** for your account. |
+| No browser window | Cached `cookies.json` is still valid — run `--relogin` or delete `cookies.json`. Check the taskbar; the window may be minimized. |
+| Wrong or empty courses | Confirm `BB_BASE_URL` is exactly the Blackboard **site root** (same host you use in the browser). |
+| Dependencies / drivers | Install `requirements.txt`; ensure Chrome or Edge is installed. `webdriver-manager` is used when possible. |
 
-- First run requires manual browser login; subsequent runs reuse cached cookies (`cookies.json`, git-ignored).
-- Cookies expire based on server policy — the tool validates the API and will ask you to log in again when cookies no longer work.
-- Some campuses use TLS chains or cipher settings that make **Python/`requests` fail with `SSLV3_ALERT_HANDSHAKE_FAILURE`** even though Chrome works. This project mounts a **compatible TLS adapter** (still verifies certificates) by default. Set **`BB_TLS_STRICT=1`** in `.env` or the environment if you need the default urllib3/OpenSSL behavior.
-- If login in the browser succeeds but the CLI reports **API / authentication failure**, check the printed diagnostics. **HTTP 403** on `/learn/api/public/v1` often means the institution has restricted the **Public REST API** for your role.
-- Courses with instructor-set access restrictions may not be downloadable.
-- Watch your disk space when downloading many courses.
+---
 
-## 🤝 Contributing
+## Contributing
 
-Pull requests and issues are welcome! Please open an issue first to discuss proposed changes.
+Issues and pull requests are welcome. For larger changes, please open an issue first to agree on direction.
 
-## ⚖️ Disclaimer
+---
 
-This tool is intended for **personal, educational use only** — to help students back up their own course materials. Please respect your institution's terms of service and intellectual property policies.
+## Disclaimer
 
-## 📄 License
+This project is for **personal, educational use** — backing up **your own** course materials. Respect your institution’s terms of service and copyright.
 
-[MIT](LICENSE)
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 中文说明
+
+- **环境变量**：仓库里只提供 **`env.template`**。复制为 **`.env`** 后填写 `BB_BASE_URL`；**不要**把 `.env` 推到 GitHub。  
+- **下载目录**：默认 **`downloads/`** 已在 `.gitignore` 中，**不会**随仓库上传。  
+- **会话**：**`cookies.json`** 含登录态，已忽略，请勿提交。  
+- **浏览器**：首次需手动登录；若已缓存有效 Cookie，再次运行可能不弹窗，可用 `python main.py --relogin`。  
+- **许可**：见仓库根目录 **[LICENSE](LICENSE)**（MIT）。
