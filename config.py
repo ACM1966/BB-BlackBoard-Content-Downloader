@@ -3,9 +3,15 @@
 """
 
 import os
+from pathlib import Path
 
-# Blackboard 基础 URL（通过环境变量配置，或修改此默认值）
-BB_BASE_URL = os.environ.get("BB_BASE_URL", "https://your-blackboard-domain.edu")
+from dotenv import load_dotenv
+
+# 项目根目录下的 .env（与 README 一致）
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
+# Blackboard 基础 URL（.env / 环境变量 / 默认值）
+BB_BASE_URL = os.environ.get("BB_BASE_URL", "https://your-blackboard-domain.edu").strip().rstrip("/")
 
 # REST API 路径前缀
 API_PREFIX = "/learn/api/public/v1"
